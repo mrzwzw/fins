@@ -66,12 +66,12 @@ func NewTCPConn(ip, port string, plcAddrNetwork, plcAddrNode, plcAddrUnit, local
 
 	c.conn = conn
 
-	log.Println("plcAddrNode:", plcAddrNode)
+	// log.Println("plcAddrNode:", plcAddrNode)
 	resv, err := c.ShakeHandsCommand(plcAddrNode)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("握手信号回复为：", resv)
+	log.Println("握手信号回复为：", string(resv))
 	c.resp = make([]chan response, 256) // storage for all responses, sid is byte - only 256 values
 	go c.listenLoop()
 	return c, nil
@@ -130,7 +130,7 @@ func (c *TcpClient) ReadWordsToUint32(memoryArea byte, address uint16, readCount
 	return data, nil
 }
 
-//  读取plc连续数据(byte)地址区域
+// 读取plc连续数据(byte)地址区域
 func (c *TcpClient) ReadBytes(memoryArea byte, address uint16, readCount uint16) ([]byte, error) {
 	if checkIsWordMemoryArea(memoryArea) == false {
 		return nil, IncompatibleMemoryAreaError{memoryArea}
@@ -329,26 +329,24 @@ func (c *TcpClient) sendCommand(command []byte) (*response, error) {
 	send = append(send, errorCode...)
 	send = append(send, bts...)
 
-	log.Println("send", send)
+	// log.Println("send", send)
 	_, err := (*c.conn).Write(send)
-	fmt.Println(bts)
 	if err != nil {
 		return nil, err
 	}
-	header.serviceID = 0
-	log.Println("send serviceID:", header.serviceID)
+	// header.serviceID = 0
 
 	// if response timeout is zero, block indefinitely
 	if c.responseTimeoutMs > 0 {
 		select {
-		case resp := <-c.resp[0]:
-			log.Println("send serviceID:", header.serviceID)
+		case resp := <-c.resp[1]:
+			// log.Println("send serviceID:", header.serviceID)
 			return &resp, nil
 		case <-time.After(c.responseTimeoutMs * time.Millisecond):
 			return nil, ResponseTimeoutError{c.responseTimeoutMs}
 		}
 	} else {
-		log.Println("send serviceID:", header.serviceID)
+		// log.Println("send serviceID:", header.serviceID)
 		resp := <-c.resp[header.serviceID]
 		return &resp, nil
 	}
@@ -367,11 +365,10 @@ func (c *TcpClient) listenLoop() {
 		}
 
 		if n > 0 {
-			ans := decodeResponse(buf[:n])
-			log.Println("buf:", buf)
-			log.Println("rec serviceID:", ans.header.serviceID)
-			log.Println("ans:", ans)
-			c.resp[ans.header.serviceID] <- ans
+			ans := decodeResponse(buf[16:n])
+			// log.Println("buf:", buf[16:n])
+			// log.Println("ans:", ans)
+			c.resp[1] <- ans
 		} else {
 			log.Println("cannot read response: ", buf)
 		}
@@ -423,7 +420,7 @@ func (c *TcpClient) encodeHeader(h Header) []byte {
 		icf, 0x00, h.gatewayCount,
 		h.dst.network, h.dst.node, h.dst.unit,
 		h.src.network, h.src.node, h.src.unit,
-		0,
+		1,
 	}
 	return bytes
 }
